@@ -100,13 +100,6 @@ function render() {
 
           <fieldset class="line-items">
             <legend>Line items</legend>
-            <div class="line-items-header" aria-hidden="true">
-              <span>Description</span>
-              <span>Qty</span>
-              <span>Price</span>
-              <span>Total</span>
-              <span></span>
-            </div>
             <div id="line-items-rows">
               ${invoice.lineItems.map((item, index) => lineItemRow(item, index)).join('')}
             </div>
@@ -139,48 +132,61 @@ function lineItemRow(item, index) {
 
   return `
     <div class="line-item" data-index="${index}">
-      <input
-        type="text"
-        name="description"
-        data-field="description"
-        placeholder="Description"
-        value="${escapeAttr(item.description)}"
-        aria-label="Description ${index + 1}"
-      />
-      <div class="cell ${qtyError ? 'has-error' : ''}">
+      <label class="line-desc">
+        <span class="line-label">Description</span>
         <input
-          type="number"
-          name="qty"
-          data-field="qty"
-          min="0"
-          step="any"
-          value="${escapeAttr(String(item.qty))}"
-          aria-label="Quantity ${index + 1}"
-          aria-invalid="${qtyError ? 'true' : 'false'}"
+          type="text"
+          name="description"
+          data-field="description"
+          placeholder="What was provided"
+          value="${escapeAttr(item.description)}"
+          aria-label="Description ${index + 1}"
         />
-        ${qtyError ? `<span class="field-error">${escapeHtml(qtyError)}</span>` : ''}
+      </label>
+      <div class="line-metrics">
+        <div class="cell ${qtyError ? 'has-error' : ''}">
+          <span class="line-label">Qty</span>
+          <input
+            type="number"
+            name="qty"
+            data-field="qty"
+            min="0"
+            step="any"
+            value="${escapeAttr(String(item.qty))}"
+            aria-label="Quantity ${index + 1}"
+            aria-invalid="${qtyError ? 'true' : 'false'}"
+          />
+          ${qtyError ? `<span class="field-error">${escapeHtml(qtyError)}</span>` : ''}
+        </div>
+        <div class="cell ${priceError ? 'has-error' : ''}">
+          <span class="line-label">Price</span>
+          <input
+            type="number"
+            name="price"
+            data-field="price"
+            min="0"
+            step="0.01"
+            value="${escapeAttr(String(item.price))}"
+            aria-label="Price ${index + 1}"
+            aria-invalid="${priceError ? 'true' : 'false'}"
+          />
+          ${priceError ? `<span class="field-error">${escapeHtml(priceError)}</span>` : ''}
+        </div>
+        <div class="cell line-total-cell">
+          <span class="line-label">Total</span>
+          <output class="line-total">${formatGbp(lineTotal(item))}</output>
+        </div>
+        <div class="cell line-actions">
+          <span class="line-label" aria-hidden="true">&nbsp;</span>
+          <button
+            type="button"
+            class="btn btn-ghost remove-line-item"
+            data-index="${index}"
+            ${invoice.lineItems.length === 1 ? 'disabled' : ''}
+            aria-label="Remove line item ${index + 1}"
+          >Remove</button>
+        </div>
       </div>
-      <div class="cell ${priceError ? 'has-error' : ''}">
-        <input
-          type="number"
-          name="price"
-          data-field="price"
-          min="0"
-          step="0.01"
-          value="${escapeAttr(String(item.price))}"
-          aria-label="Price ${index + 1}"
-          aria-invalid="${priceError ? 'true' : 'false'}"
-        />
-        ${priceError ? `<span class="field-error">${escapeHtml(priceError)}</span>` : ''}
-      </div>
-      <output class="line-total">${formatGbp(lineTotal(item))}</output>
-      <button
-        type="button"
-        class="btn btn-ghost remove-line-item"
-        data-index="${index}"
-        ${invoice.lineItems.length === 1 ? 'disabled' : ''}
-        aria-label="Remove line item ${index + 1}"
-      >Remove</button>
     </div>
   `;
 }

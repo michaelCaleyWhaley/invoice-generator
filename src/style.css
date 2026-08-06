@@ -278,40 +278,76 @@ button:focus-visible {
   background: var(--danger-bg);
 }
 
-.line-items-header,
 .line-item {
-  display: grid;
-  grid-template-columns: 1fr 4.25rem 5.5rem 4.75rem auto;
-  gap: 0.4rem;
-  align-items: start;
-  margin-bottom: 0.55rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+  margin-bottom: 0.85rem;
+  padding-bottom: 0.85rem;
+  border-bottom: 1px solid var(--border);
 }
 
-.line-items-header {
+.line-item:last-child {
+  margin-bottom: 0.35rem;
+}
+
+.line-desc {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  margin-bottom: 0;
+  width: 100%;
+}
+
+.line-desc input {
+  width: 100%;
+  min-width: 0;
+}
+
+.line-label {
   font-size: 0.72rem;
   font-weight: 600;
   letter-spacing: 0.04em;
   text-transform: uppercase;
   color: var(--muted);
-  margin-bottom: 0.4rem;
 }
 
-.line-item input {
-  margin: 0;
+.line-metrics {
+  display: grid;
+  grid-template-columns: 5rem 6.5rem minmax(5.5rem, 1fr) auto;
+  gap: 0.5rem;
+  align-items: start;
 }
 
 .cell {
   display: flex;
   flex-direction: column;
-  gap: 0.15rem;
+  gap: 0.3rem;
+  min-width: 0;
 }
 
-.line-total {
+.cell input {
+  width: 100%;
+  min-width: 0;
+  margin: 0;
+}
+
+.line-total-cell .line-total {
+  display: flex;
+  align-items: center;
+  min-height: 2.35rem;
+  padding: 0 0.15rem;
   font-family: var(--mono);
   font-variant-numeric: tabular-nums;
-  text-align: right;
-  font-size: 0.84rem;
-  padding-top: 0.55rem;
+  font-size: 0.9rem;
+}
+
+.line-actions {
+  justify-self: end;
+}
+
+.line-actions .btn {
+  min-height: 2.35rem;
 }
 
 .line-items-footer {
@@ -373,18 +409,13 @@ button:focus-visible {
     flex: 1;
   }
 
-  .line-items-header {
-    display: none;
-  }
-
-  .line-item {
+  .line-metrics {
     grid-template-columns: 1fr 1fr;
-    padding-bottom: 0.85rem;
-    border-bottom: 1px solid var(--border);
   }
 
-  .line-item input[data-field='description'] {
-    grid-column: 1 / -1;
+  .line-total-cell,
+  .line-actions {
+    grid-column: span 1;
   }
 
   .line-items-footer {
