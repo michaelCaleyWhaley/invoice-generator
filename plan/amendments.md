@@ -57,3 +57,24 @@
 **Deliverable:** on page load, the Logo section appears collapsed at the top of the input list; expanding it reveals the upload controls; Customer and Invoice fields remain visible as normal below it; live preview and action buttons remain visible and usable regardless of accordion state.
 
 ---
+
+That symptom — page jumping to top plus a flicker — is a classic sign of one of two causes. Worth pinning down which, since the fix differs:
+
+**Likely cause 1: Actual page navigation/reload**
+If "Add Line Item" is a `<button>` inside a `<form>` without `type="button"`, it defaults to `type="submit"`, which submits the form and reloads the page — that's a full page reload, which would explain both the flicker and the jump-to-top instantly. This is the most common cause of this exact symptom.
+
+**Likely cause 2: Full DOM re-render on every state change**
+If the render function rebuilds the entire form's HTML (e.g. `container.innerHTML = renderForm(state)`) every time state changes, the whole DOM tree gets torn down and rebuilt on each keystroke/click — losing scroll position (hence jump-to-top) and causing a visible flicker, even without a real page reload.
+
+## Phase 10 — Fix line-item add causing flicker/scroll reset
+
+- **Diagnose first:** check the "Add Line Item" button's `type` attribute — if missing or `type="submit"` inside a `<form>`, change to `type="button"` and confirm this alone fixes it (quick, high-probability fix)
+- **If flicker persists after that fix**, the render approach is likely doing full-DOM replacement on state change:
+  - Move to targeted DOM updates: only append the new line-item row element to the existing table, rather than re-rendering the whole form
+  - Alternative if a lighter refactor is preferred: preserve scroll position manually before re-render and restore it after (`window.scrollY` captured/restored around the render call) — a smaller patch than restructuring the render logic, but treats the symptom rather than the cause
+- Preferred fix: structure line-item rendering so each row is its own DOM node that gets appended/removed individually (add → `appendChild` one new row; remove → `removeChild` that one row) rather than the whole list re-rendering from scratch on every change
+- Re-test: add multiple line items in a row, confirm no flicker, no scroll jump, and existing input focus/values in other fields aren't lost mid-edit
+
+**Deliverable:** clicking "Add Line Item" appends a new row smoothly with no visible flicker and no scroll position change.
+
+---

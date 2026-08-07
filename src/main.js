@@ -217,6 +217,43 @@ function lineItemRow(item, index) {
   `;
 }
 
+function createLineItemElement(item, index) {
+  const wrapper = document.createElement('div');
+  wrapper.innerHTML = lineItemRow(item, index);
+  return wrapper.firstElementChild;
+}
+
+function appendLineItem(item, index) {
+  const container = document.querySelector('#line-items-rows');
+  if (!container) return;
+  const el = createLineItemElement(item, index);
+  container.appendChild(el);
+}
+
+function refreshLineItemIndices() {
+  const rows = Array.from(document.querySelectorAll('#line-items-rows .line-item'));
+  rows.forEach((row, i) => {
+    row.dataset.index = String(i);
+    const desc = row.querySelector('input[name="description"]');
+    if (desc) desc.setAttribute('aria-label', `Description ${i + 1}`);
+    const qty = row.querySelector('input[data-field="qty"]');
+    if (qty) qty.setAttribute('aria-label', `Quantity ${i + 1}`);
+    const price = row.querySelector('input[data-field="price"]');
+    if (price) price.setAttribute('aria-label', `Price ${i + 1}`);
+    const removeBtn = row.querySelector('.remove-line-item');
+    if (removeBtn) {
+      removeBtn.dataset.index = String(i);
+      removeBtn.disabled = invoice.lineItems.length === 1;
+      removeBtn.setAttribute('aria-label', `Remove line item ${i + 1}`);
+    }
+  });
+}
+
+function updateInvoiceTotalDisplay() {
+  const totalEl = document.querySelector('.invoice-total strong');
+  if (totalEl) totalEl.textContent = formatGbp(invoiceTotal(invoice));
+}
+
 function bindEvents() {
   document.querySelector('#new-invoice').addEventListener('click', () => {
     invoice = createNewInvoice();
@@ -264,10 +301,16 @@ function bindEvents() {
   });
 
   document.querySelector('#add-line-item').addEventListener('click', () => {
-    invoice.lineItems.push(createEmptyLineItem());
+    const newItem = createEmptyLineItem();
+    invoice.lineItems.push(newItem);
     fieldErrors = null;
+    const index = invoice.lineItems.length - 1;
+    appendLineItem(newItem, index);
+    updateInvoiceTotalDisplay();
     persist('add-line-item');
-    render();
+    // focus the new description input
+    const newRow = document.querySelector(`.line-item[data-index="${index}"]`);
+    newRow?.querySelector('input[name="description"]')?.focus();
   });
 
   const logoUpload = document.querySelector('#logo-upload');
@@ -305,16 +348,25 @@ function bindEvents() {
     });
   }
 
-  document.querySelectorAll('.remove-line-item').forEach((button) => {
-    button.addEventListener('click', () => {
-      const index = Number(button.dataset.index);
+  // Delegate remove-line-item clicks to avoid re-binding for dynamic rows
+  const formClickHandler = (event) => {
+    const target = event.target;
+    const removeBtn = target.closest?.('.remove-line-item');
+    if (removeBtn) {
+      const index = Number(removeBtn.dataset.index);
       if (invoice.lineItems.length <= 1) return;
       invoice.lineItems.splice(index, 1);
+      const row = document.querySelector(`.line-item[data-index="${index}"]`);
+      row?.remove();
+      refreshLineItemIndices();
       fieldErrors = null;
+      updateInvoiceTotalDisplay();
       persist('remove-line-item');
-      render();
-    });
-  });
+    }
+  };
+
+  const formEl = document.querySelector('#invoice-fields');
+  formEl.addEventListener('click', formClickHandler);
 
   const uploadButton = document.querySelector('#upload-invoice-json');
   const uploadInput = document.querySelector('#invoice-json-upload');
