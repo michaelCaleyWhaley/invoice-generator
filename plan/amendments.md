@@ -78,3 +78,40 @@ If the render function rebuilds the entire form's HTML (e.g. `container.innerHTM
 **Deliverable:** clicking "Add Line Item" appends a new row smoothly with no visible flicker and no scroll position change.
 
 ---
+
+## Phase 11 — Move constants to `.env`
+
+- Create `.env` (git-ignored) and `.env.example` (committed, same keys, placeholder values) at the project root
+- All `VITE_`-prefixed keys (required by Vite to expose them to client code via `import.meta.env`):
+  ```
+  VITE_ISSUER_NAME=
+  VITE_ISSUER_ADDRESS=
+  VITE_ISSUER_CONTACT=
+  VITE_PAYMENT_BANK_NAME=
+  VITE_PAYMENT_ACCOUNT_NAME=
+  VITE_PAYMENT_ACCOUNT_NUMBER=
+  VITE_PAYMENT_SORT_CODE=
+  VITE_PAGE_SIZE=A4
+  VITE_MARGIN=50
+  ```
+- **Multi-line values (address):** `.env` files don't handle real line breaks cleanly — use a delimiter convention instead, e.g. store as a single line with `\n` escape sequences or a separator like `|`, and split it back into lines in code:
+  ```
+  VITE_ISSUER_ADDRESS=123 Example Street|Second Line|City|Postcode
+  ```
+  parsed as `import.meta.env.VITE_ISSUER_ADDRESS.split('|')`
+- Update `src/constants.js` to read from `import.meta.env` instead of hardcoded values:
+  ```js
+  export const ISSUER_DETAILS = {
+    name: import.meta.env.VITE_ISSUER_NAME,
+    address: import.meta.env.VITE_ISSUER_ADDRESS.split("|"),
+    contact: import.meta.env.VITE_ISSUER_CONTACT,
+  };
+  ```
+- Add `.env` to `.gitignore` (confirm it's not already tracked — if it was ever committed previously, it needs removing from git history too, not just added to `.gitignore` going forward)
+- `.env.example` committed with the same key names and empty/placeholder values, so anyone cloning the repo knows what to fill in
+- Confirm build behavior: since Vite inlines `import.meta.env.VITE_*` values into the JS bundle at build time, the `dist/` output will contain the actual values baked in as plain strings — this is expected and required for the app to work (there's no server to read `.env` at runtime), but it does mean **the built app is only as private as wherever you host/share the `dist/` folder**
+- Update README (if one exists, or create a short one) noting: copy `.env.example` to `.env`, fill in real values, then run the build
+
+**Deliverable:** all business-specific config lives in a git-ignored `.env`, with `.env.example` documenting the required keys; building the app correctly bakes these values into the static output exactly as before, just sourced from environment config instead of a hardcoded file.
+
+---

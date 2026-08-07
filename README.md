@@ -28,23 +28,31 @@ npm run preview  # serve the production build locally
 ```
 
 ## Customise issuer & payment details
+Configure issuer and payment details via environment variables.
 
-Edit `src/constants.js`:
+1. Copy `.env.example` to `.env` and fill in your values:
 
-```js
-export const ISSUER_DETAILS = {
-  name: '…',
-  address: ['…'],
-  contact: { email: '…', phone: '…' },
-};
-
-export const PAYMENT_DETAILS = {
-  bankName: '…',
-  accountName: '…',
-  accountNumber: '…',
-  sortCode: '…',
-};
+```bash
+cp .env.example .env
+# edit .env
 ```
+
+Use `|` to separate address lines (for example `Line 1|Line 2|City|Postcode`).
+
+Keys available (all `VITE_`-prefixed so Vite exposes them to client code):
+
+- `VITE_ISSUER_NAME`
+- `VITE_ISSUER_ADDRESS` (use `|` to separate lines)
+- `VITE_ISSUER_CONTACT`
+- `VITE_ISSUER_PHONE`
+- `VITE_PAYMENT_BANK_NAME`
+- `VITE_PAYMENT_ACCOUNT_NAME`
+- `VITE_PAYMENT_ACCOUNT_NUMBER`
+- `VITE_PAYMENT_SORT_CODE`
+- `VITE_PAGE_SIZE` (defaults to `A4`)
+- `VITE_MARGIN` (page margin in points, defaults to `50`)
+
+The application reads these at build time and falls back to sensible defaults during development if any are missing.
 
 Page size (`A4`) and margins live in the same file.
 
