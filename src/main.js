@@ -47,16 +47,13 @@ function render() {
           <div class="header-actions">
             <button type="button" id="new-invoice" class="btn btn-secondary">New Invoice</button>
             <button type="button" id="download-pdf" class="btn btn-primary">Download PDF</button>
+            <button type="button" id="upload-invoice-json" class="btn btn-secondary">Upload Invoice JSON</button>
           </div>
         </header>
 
         ${(() => {
-          if (invoiceNumberNeedsReview) {
-            return `<p class="banner" role="status">Draft restored from this browser. Review the invoice number before sending.</p>`;
-          }
-          if (uploadWarning) {
-            return `<p class="banner" role="status">${escapeHtml(uploadWarning)}</p>`;
-          }
+          if (invoiceNumberNeedsReview) return `<p class="banner" role="status">Draft restored from this browser. Review the invoice number before sending.</p>`;
+          if (uploadWarning) return `<p class="banner" role="status">${escapeHtml(uploadWarning)}</p>`;
           return '';
         })()}
 
@@ -64,6 +61,25 @@ function render() {
         <div id="storage-error-summary" class="error-summary" ${storageError ? '' : 'hidden'}>${escapeHtml(storageError)}</div>
 
         <form id="invoice-fields" autocomplete="off" novalidate>
+
+          <details>
+            <summary>Logo</summary>
+            <fieldset>
+              <legend class="visually-hidden">Logo</legend>
+              <label>
+                Upload logo
+                <input
+                  type="file"
+                  id="logo-upload"
+                  accept=".svg,image/svg+xml,.png,image/png,.jpg,.jpeg,image/jpeg"
+                />
+              </label>
+              ${invoice.logoData ? `<p class="logo-status">Current logo: ${invoice.logoType === 'svg' ? 'SVG' : 'Raster image'}</p>` : ''}
+              ${invoice.logoData ? '<button type="button" id="remove-logo" class="btn btn-ghost">Remove logo</button>' : ''}
+              ${logoError ? `<p class="field-error">${escapeHtml(logoError)}</p>` : ''}
+            </fieldset>
+          </details>
+
           <fieldset>
             <legend>Invoice</legend>
             <div class="field-grid">
@@ -88,30 +104,6 @@ function render() {
           </fieldset>
 
           <fieldset>
-            <legend>Logo</legend>
-            <label>
-              Upload logo
-              <input
-                type="file"
-                id="logo-upload"
-                accept=".svg,image/svg+xml,.png,image/png,.jpg,.jpeg,image/jpeg"
-              />
-            </label>
-            ${invoice.logoData ? `<p class="logo-status">Current logo: ${invoice.logoType === 'svg' ? 'SVG' : 'Raster image'}</p>` : ''}
-            ${invoice.logoData ? '<button type="button" id="remove-logo" class="btn btn-ghost">Remove logo</button>' : ''}
-            ${logoError ? `<p class="field-error">${escapeHtml(logoError)}</p>` : ''}
-          </fieldset>
-
-          <fieldset>
-            <legend>Invoice actions</legend>
-            <div class="action-row">
-              <button type="button" id="upload-invoice-json" class="btn btn-secondary">Upload Invoice JSON</button>
-              <input type="file" id="invoice-json-upload" accept=".json,application/json" hidden />
-            </div>
-            ${jsonUploadError ? `<p class="field-error">${escapeHtml(jsonUploadError)}</p>` : ''}
-          </fieldset>
-
-          <fieldset>
             <legend>Customer</legend>
             <label class="${customerNameError ? 'has-error' : ''}">
               Name
@@ -122,11 +114,7 @@ function render() {
                 aria-invalid="${customerNameError ? 'true' : 'false'}"
                 aria-describedby="${customerNameError ? 'customerName-error' : ''}"
               />
-              ${
-                customerNameError
-                  ? `<span id="customerName-error" class="field-error">${escapeHtml(customerNameError)}</span>`
-                  : ''
-              }
+              ${customerNameError ? `<span id="customerName-error" class="field-error">${escapeHtml(customerNameError)}</span>` : ''}
             </label>
             <label>
               Address
@@ -144,6 +132,8 @@ function render() {
               <p class="invoice-total">Total <strong>${formatGbp(total)}</strong></p>
             </div>
           </fieldset>
+
+          <input type="file" id="invoice-json-upload" accept=".json,application/json" hidden />
         </form>
       </section>
 
@@ -603,9 +593,6 @@ async function parseInvoiceJsonFile(file) {
   return normalizedInvoice;
 }
 
-/**
- * @param {{ immediate?: boolean }} [options]
- */
 function schedulePreview(options = {}) {
   clearTimeout(previewTimer);
   if (options.immediate) {

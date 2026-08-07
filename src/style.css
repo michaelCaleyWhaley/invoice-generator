@@ -171,6 +171,35 @@ legend {
   color: var(--muted);
 }
 
+/* Style native details/summary to match fieldset spacing when collapsed */
+details {
+  margin: 0 0 1rem;
+}
+
+details summary {
+  list-style: none;
+  padding: 0.95rem 1rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: #fff;
+  cursor: pointer;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+details[open] summary {
+  border-bottom-left-radius: 0;
+  border-bottom-right-radius: 0;
+}
+
+/* When the details contains its own fieldset, remove duplicate spacing */
+details > fieldset {
+  margin-top: 0;
+  border-top: none;
+  padding-top: 0.6rem;
+}
+
+
 .field-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;

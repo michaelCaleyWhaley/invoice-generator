@@ -44,18 +44,16 @@
 
 ---
 
-Got it — so two accordions: **Logo** (containing the logo upload/remove controls) and **Invoice** (containing the form inputs — customer name, address, terms, line items), both collapsed by default. Buttons like Download PDF / New Invoice / Upload JSON stay outside the accordions, always visible, since they're actions rather than inputs.
+## Phase 9 — Collapsible Logo section (updated)
 
-Got it — so the accordion structure splits into three pieces, not two, with "Customer" kept as its own distinct section (not merged into a general "Invoice" section), and Logo + Customer both moved above the rest of the fields.
-
-## Phase 9 — Collapsible accordions for inputs (updated)
-
-- One collapsible input section, all **default-collapsed** on page load, in this order top to bottom:
-  1. **"Logo"** — logo upload input, preview, "Remove logo" control (from Phase 7)
-- Live preview pane stays always-visible outside the accordions
+- One collapsible section: **"Logo"** — logo upload input, preview, "Remove logo" control (from Phase 7)
+- **Default-collapsed** on page load
+- **Positioned first** in the input list — appears above the Customer fields and Invoice fields, which remain plain (non-collapsible) inputs as originally specified in Phase 2
+- Live preview pane stays always-visible outside the accordion
 - Accordion state doesn't persist across reloads — always starts collapsed
-- Implementation: `<details>`/`<summary>` per section (no extra dependency, native keyboard accessibility) unless custom animated open/close is wanted, in which case a toggle-class approach with explicit `tabindex`/`aria-expanded` handling
+- Implementation: `<details>`/`<summary>` (no extra dependency, native keyboard accessibility) unless custom animated open/close is wanted, in which case a toggle-class approach with explicit `tabindex`/`aria-expanded` handling
+- give the collapsed section the same margin as the rest of the inputs
 
-**Deliverable:** on page load, Logo, Customer, and Invoice sections appear collapsed in that order; expanding any reveals its inputs; live preview and action buttons remain visible and usable regardless of accordion state.
+**Deliverable:** on page load, the Logo section appears collapsed at the top of the input list; expanding it reveals the upload controls; Customer and Invoice fields remain visible as normal below it; live preview and action buttons remain visible and usable regardless of accordion state.
 
 ---
