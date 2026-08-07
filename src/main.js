@@ -41,7 +41,6 @@ function render() {
       <section class="form-pane">
         <header class="form-header">
           <div>
-            <p class="eyebrow">Acme Consulting</p>
             <h1>Invoice Generator</h1>
           </div>
           <div class="header-actions">
