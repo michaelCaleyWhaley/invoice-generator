@@ -161,3 +161,28 @@ If the render function rebuilds the entire form's HTML (e.g. `container.innerHTM
 - The spacing between Subtotal, VAT, Total on the pdf need to be consistent
 
 ---
+
+## Phase 14 — Rename downloaded files to include customer name
+
+- Change filename pattern for both downloads from `invoice-{number}.pdf`/`.json` to:
+  ```
+  Invoice-{customerName}-{invoiceNumber}.pdf
+  Invoice-{customerName}-{invoiceNumber}.json
+  ```
+- **Sanitize `customerName` before using it in a filename** — customer names may contain characters invalid or awkward in filenames (`/`, `\`, `:`, `*`, `?`, `"`, `<`, `>`, `|`, or just spaces). Add a small sanitizer:
+  ```js
+  function sanitizeForFilename(str) {
+    return str
+      .trim()
+      .replace(/[\/\\:*?"<>|]/g, "") // strip invalid filename chars
+      .replace(/\s+/g, "-"); // spaces to hyphens
+  }
+  ```
+  e.g. `"Acme Ltd / Retail"` → `Acme-Ltd-Retail`
+- **Edge case:** if `customerName` is empty at download time, fall back to a placeholder (e.g. `Unnamed-Customer`) so the filename never collapses to `Invoice--{number}.pdf` with a blank gap — pair this with the existing Phase 5 validation (customer name required) so this ideally never triggers in practice, just guards against it
+- Apply the same naming to both the PDF (Phase 5) and JSON (Phase 8) download calls, keeping the delayed second-download logic (Phase 8's ~150ms `setTimeout`) unchanged — just the filename string changes
+- Re-test: customer names with spaces, slashes, and special characters produce clean, valid filenames on both files, and the pair still matches (same customer name + invoice number in both)
+
+**Deliverable:** downloaded files are named `Invoice-{customerName}-{invoiceNumber}.pdf` and `.json`, with customer names sanitized for filename safety and a fallback for the empty-name edge case.
+
+---

@@ -297,13 +297,18 @@ function bindEvents() {
 
     try {
       const pdfBlob = await generateInvoicePdf(invoice);
-      triggerDownload(pdfBlob, `invoice-${invoice.invoiceNumber || 'draft'}.pdf`);
+      const customerSafe = sanitizeForFilename(invoice.customerName);
+      const numberSafe = invoice.invoiceNumber || 'draft';
+      const pdfFilename = `Invoice-${customerSafe}-${numberSafe}.pdf`;
+
+      triggerDownload(pdfBlob, pdfFilename);
 
       const jsonBlob = new Blob([
         JSON.stringify(invoiceToExportJson(invoice), null, 2),
       ], { type: 'application/json' });
       setTimeout(() => {
-        triggerDownload(jsonBlob, `invoice-${invoice.invoiceNumber || 'draft'}.json`);
+        const jsonFilename = `Invoice-${customerSafe}-${numberSafe}.json`;
+        triggerDownload(jsonBlob, jsonFilename);
       }, 150);
     } catch (err) {
       console.error('[pdf] download failed', err);
@@ -568,6 +573,12 @@ function triggerDownload(blob, filename) {
   a.download = filename;
   a.click();
   URL.revokeObjectURL(url);
+}
+
+function sanitizeForFilename(str) {
+  const s = String(str ?? '').trim();
+  const cleaned = s.replace(/[\/\\:\*\?"<>|]/g, '').replace(/\s+/g, '-');
+  return cleaned || 'Unnamed-Customer';
 }
 
 function invoiceToExportJson(invoice) {
