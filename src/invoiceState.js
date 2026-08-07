@@ -47,6 +47,8 @@ export function createDefaultInvoice() {
     date: todayIsoDate(),
     terms: 'Net 30',
     lineItems: [createEmptyLineItem()],
+    logoType: null,
+    logoData: '',
   };
 }
 
@@ -85,6 +87,11 @@ export function loadInvoice() {
               price: Number(item.price) || 0,
             }))
           : [createEmptyLineItem()],
+      logoType:
+        parsed.logoType === 'svg' || parsed.logoType === 'raster'
+          ? parsed.logoType
+          : null,
+      logoData: String(parsed.logoData ?? ''),
     };
     return { invoice, restored: true };
   } catch (err) {

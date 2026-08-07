@@ -12,12 +12,17 @@ import { generateInvoicePdf } from './generatePdf.js';
 import { validateInvoice } from './validate.js';
 
 const PREVIEW_DEBOUNCE_MS = 300;
+const MAX_LOGO_BYTES = 2 * 1024 * 1024;
+const MAX_LOGO_WIDTH = 400;
+const ALLOWED_LOGO_TYPES = ['image/svg+xml', 'image/png', 'image/jpeg'];
 
 const { invoice: initialInvoice, restored } = loadInvoice();
 let invoice = initialInvoice;
 let invoiceNumberNeedsReview = restored;
 /** @type {ReturnType<typeof validateInvoice>['errors'] | null} */
 let fieldErrors = null;
+let logoError = '';
+let storageError = '';
 
 let previewUrl = null;
 let previewTimer = null;
@@ -50,6 +55,7 @@ function render() {
         }
 
         <div id="form-error-summary" class="error-summary" hidden></div>
+        <div id="storage-error-summary" class="error-summary" ${storageError ? '' : 'hidden'}>${escapeHtml(storageError)}</div>
 
         <form id="invoice-fields" autocomplete="off" novalidate>
           <fieldset>
@@ -73,6 +79,21 @@ function render() {
               Terms
               <input type="text" name="terms" value="${escapeAttr(invoice.terms)}" />
             </label>
+          </fieldset>
+
+          <fieldset>
+            <legend>Logo</legend>
+            <label>
+              Upload logo
+              <input
+                type="file"
+                id="logo-upload"
+                accept=".svg,image/svg+xml,.png,image/png,.jpg,.jpeg,image/jpeg"
+              />
+            </label>
+            ${invoice.logoData ? `<p class="logo-status">Current logo: ${invoice.logoType === 'svg' ? 'SVG' : 'Raster image'}</p>` : ''}
+            ${invoice.logoData ? '<button type="button" id="remove-logo" class="btn btn-ghost">Remove logo</button>' : ''}
+            ${logoError ? `<p class="field-error">${escapeHtml(logoError)}</p>` : ''}
           </fieldset>
 
           <fieldset>
@@ -196,6 +217,8 @@ function bindEvents() {
     invoice = createNewInvoice();
     invoiceNumberNeedsReview = false;
     fieldErrors = null;
+    logoError = '';
+    storageError = '';
     render();
   });
 
@@ -237,6 +260,41 @@ function bindEvents() {
     persist('add-line-item');
     render();
   });
+
+  const logoUpload = document.querySelector('#logo-upload');
+  if (logoUpload) {
+    logoUpload.addEventListener('change', async () => {
+      if (!logoUpload.files?.length) return;
+      const file = logoUpload.files[0];
+      logoError = '';
+      const validation = validateLogoFile(file);
+      if (!validation.ok) {
+        logoError = validation.message;
+        render();
+        return;
+      }
+
+      try {
+        await loadLogoFile(file);
+        logoError = '';
+      } catch (err) {
+        console.error('[logo] upload failed', err);
+        logoError = err?.message || 'Failed to load logo.';
+      }
+      render();
+    });
+  }
+
+  const removeLogoButton = document.querySelector('#remove-logo');
+  if (removeLogoButton) {
+    removeLogoButton.addEventListener('click', () => {
+      invoice.logoType = null;
+      invoice.logoData = '';
+      logoError = '';
+      persist('remove-logo');
+      render();
+    });
+  }
 
   document.querySelectorAll('.remove-line-item').forEach((button) => {
     button.addEventListener('click', () => {
@@ -368,9 +426,26 @@ function clearErrorSummary() {
 }
 
 function persist(reason) {
-  saveInvoice(invoice);
+  try {
+    saveInvoice(invoice);
+    storageError = '';
+  } catch (err) {
+    console.error('[storage] save failed', err);
+    storageError = getStorageErrorMessage(err);
+    render();
+    return;
+  }
+
   console.log('[invoice]', { reason, invoice });
   schedulePreview();
+}
+
+function getStorageErrorMessage(err) {
+  const name = err?.name;
+  if (name === 'QuotaExceededError' || name === 'NS_ERROR_DOM_QUOTA_REACHED') {
+    return 'Unable to save invoice draft: browser storage quota exceeded. Remove the logo or clear other local data.';
+  }
+  return `Unable to save invoice draft: ${err?.message || 'unknown error'}`;
 }
 
 /**
@@ -418,6 +493,58 @@ function escapeHtml(value) {
     .replaceAll('&', '&amp;')
     .replaceAll('<', '&lt;')
     .replaceAll('>', '&gt;');
+}
+
+function validateLogoFile(file) {
+  if (file.size > MAX_LOGO_BYTES) {
+    return { ok: false, message: 'Logo must be 2MB or smaller before processing.' };
+  }
+
+  if (!ALLOWED_LOGO_TYPES.includes(file.type)) {
+    return {
+      ok: false,
+      message: 'Please upload an SVG, PNG, or JPEG logo file.',
+    };
+  }
+
+  return { ok: true };
+}
+
+async function loadLogoFile(file) {
+  if (file.type === 'image/svg+xml') {
+    const svg = await readFileAsText(file);
+    invoice.logoType = 'svg';
+    invoice.logoData = svg;
+    persist('logo-upload');
+    return;
+  }
+
+  const rasterData = await readAndDownscaleRaster(file, MAX_LOGO_WIDTH);
+  invoice.logoType = 'raster';
+  invoice.logoData = rasterData;
+  persist('logo-upload');
+}
+
+function readFileAsText(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result || ''));
+    reader.onerror = () => reject(reader.error || new Error('Unable to read the logo file.'));
+    reader.readAsText(file);
+  });
+}
+
+async function readAndDownscaleRaster(file, maxWidth) {
+  const bitmap = await createImageBitmap(file);
+  const width = Math.min(bitmap.width, maxWidth);
+  const height = Math.round((bitmap.height * width) / bitmap.width);
+  const canvas = document.createElement('canvas');
+  canvas.width = width;
+  canvas.height = height;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) throw new Error('Canvas is not supported in this browser.');
+  ctx.drawImage(bitmap, 0, 0, width, height);
+  return canvas.toDataURL('image/png');
 }
 
 function escapeAttr(value) {

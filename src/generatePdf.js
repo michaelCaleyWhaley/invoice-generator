@@ -1,5 +1,6 @@
 import PDFDocument from 'pdfkit/js/pdfkit.standalone.js';
 import blobStream from 'blob-stream';
+import SVGtoPDF from 'svg-to-pdfkit';
 import {
   PAGE_SIZE,
   MARGIN,
@@ -94,13 +95,45 @@ export function generateInvoicePdf(invoiceData) {
 function drawHeader(doc, invoiceData) {
   const rightX = 320;
   const top = MARGIN;
+  const logoBoxWidth = 150;
+  const logoBoxHeight = 50;
+  const logoX = MARGIN;
+  const logoY = top;
+  const metaWidth = PAGE_WIDTH - MARGIN - rightX;
 
-  doc.font(FONT_BOLD).fontSize(16).text(ISSUER_DETAILS.name, MARGIN, top, {
-    width: 250,
-  });
+  let renderTextName = true;
+  if (invoiceData.logoType === 'raster' && invoiceData.logoData) {
+    try {
+      doc.image(invoiceData.logoData, logoX, logoY, {
+        fit: [logoBoxWidth, logoBoxHeight],
+      });
+      renderTextName = false;
+    } catch (err) {
+      console.warn('Raster logo render failed', err);
+    }
+  } else if (invoiceData.logoType === 'svg' && invoiceData.logoData) {
+    try {
+      SVGtoPDF(doc, invoiceData.logoData, logoX, logoY, {
+        width: logoBoxWidth,
+        height: logoBoxHeight,
+        preserveAspectRatio: 'xMinYMin meet',
+      });
+      renderTextName = false;
+    } catch (err) {
+      console.warn('SVG logo render failed', err);
+      renderTextName = true;
+    }
+  }
+
+  if (renderTextName) {
+    doc.font(FONT_BOLD).fontSize(16).text(ISSUER_DETAILS.name, logoX, logoY, {
+      width: logoBoxWidth,
+    });
+  }
 
   doc.font(FONT).fontSize(9);
-  let y = doc.y + 4;
+  const addressTop = top + logoBoxHeight + 8;
+  let y = renderTextName ? Math.max(doc.y, addressTop) : addressTop;
   for (const line of ISSUER_DETAILS.address) {
     doc.text(line, MARGIN, y, { width: 250 });
     y = doc.y;
@@ -116,7 +149,6 @@ function drawHeader(doc, invoiceData) {
 
   doc.font(FONT).fontSize(10);
   let metaY = top + 28;
-  const metaWidth = PAGE_WIDTH - MARGIN - rightX;
   doc.text(`Invoice #: ${invoiceData.invoiceNumber || ''}`, rightX, metaY, {
     width: metaWidth,
     align: 'right',
@@ -134,7 +166,7 @@ function drawHeader(doc, invoiceData) {
     });
   }
 
-  doc.y = Math.max(issuerBottom, doc.y) + 20;
+  doc.y = Math.max(issuerBottom, top + logoBoxHeight) + 20;
 }
 
 function drawCustomer(doc, invoiceData) {
