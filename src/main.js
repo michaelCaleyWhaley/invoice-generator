@@ -23,6 +23,8 @@ let invoiceNumberNeedsReview = restored;
 let fieldErrors = null;
 let logoError = '';
 let storageError = '';
+let uploadWarning = '';
+let jsonUploadError = '';
 
 let previewUrl = null;
 let previewTimer = null;
@@ -48,11 +50,15 @@ function render() {
           </div>
         </header>
 
-        ${
-          invoiceNumberNeedsReview
-            ? `<p class="banner" role="status">Draft restored from this browser. Review the invoice number before sending.</p>`
-            : ''
-        }
+        ${(() => {
+          if (invoiceNumberNeedsReview) {
+            return `<p class="banner" role="status">Draft restored from this browser. Review the invoice number before sending.</p>`;
+          }
+          if (uploadWarning) {
+            return `<p class="banner" role="status">${escapeHtml(uploadWarning)}</p>`;
+          }
+          return '';
+        })()}
 
         <div id="form-error-summary" class="error-summary" hidden></div>
         <div id="storage-error-summary" class="error-summary" ${storageError ? '' : 'hidden'}>${escapeHtml(storageError)}</div>
@@ -94,6 +100,15 @@ function render() {
             ${invoice.logoData ? `<p class="logo-status">Current logo: ${invoice.logoType === 'svg' ? 'SVG' : 'Raster image'}</p>` : ''}
             ${invoice.logoData ? '<button type="button" id="remove-logo" class="btn btn-ghost">Remove logo</button>' : ''}
             ${logoError ? `<p class="field-error">${escapeHtml(logoError)}</p>` : ''}
+          </fieldset>
+
+          <fieldset>
+            <legend>Invoice actions</legend>
+            <div class="action-row">
+              <button type="button" id="upload-invoice-json" class="btn btn-secondary">Upload Invoice JSON</button>
+              <input type="file" id="invoice-json-upload" accept=".json,application/json" hidden />
+            </div>
+            ${jsonUploadError ? `<p class="field-error">${escapeHtml(jsonUploadError)}</p>` : ''}
           </fieldset>
 
           <fieldset>
@@ -219,6 +234,8 @@ function bindEvents() {
     fieldErrors = null;
     logoError = '';
     storageError = '';
+    uploadWarning = '';
+    jsonUploadError = '';
     render();
   });
 
@@ -239,13 +256,15 @@ function bindEvents() {
     button.disabled = true;
 
     try {
-      const blob = await generateInvoicePdf(invoice);
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `invoice-${invoice.invoiceNumber || 'draft'}.pdf`;
-      a.click();
-      URL.revokeObjectURL(url);
+      const pdfBlob = await generateInvoicePdf(invoice);
+      triggerDownload(pdfBlob, `invoice-${invoice.invoiceNumber || 'draft'}.pdf`);
+
+      const jsonBlob = new Blob([
+        JSON.stringify(invoiceToExportJson(invoice), null, 2),
+      ], { type: 'application/json' });
+      setTimeout(() => {
+        triggerDownload(jsonBlob, `invoice-${invoice.invoiceNumber || 'draft'}.json`);
+      }, 150);
     } catch (err) {
       console.error('[pdf] download failed', err);
       alert(`PDF generation failed: ${err.message}`);
@@ -306,6 +325,39 @@ function bindEvents() {
       render();
     });
   });
+
+  const uploadButton = document.querySelector('#upload-invoice-json');
+  const uploadInput = document.querySelector('#invoice-json-upload');
+  if (uploadButton && uploadInput) {
+    uploadButton.addEventListener('click', () => uploadInput.click());
+    uploadInput.addEventListener('change', async () => {
+      if (!uploadInput.files?.length) return;
+      const file = uploadInput.files[0];
+      uploadInput.value = '';
+      jsonUploadError = '';
+      uploadWarning = '';
+
+      try {
+        const importedInvoice = await parseInvoiceJsonFile(file);
+        invoice = {
+          ...invoice,
+          ...importedInvoice,
+          logoType: invoice.logoType,
+          logoData: invoice.logoData,
+        };
+        invoiceNumberNeedsReview = false;
+        fieldErrors = null;
+        uploadWarning = `Loaded invoice ${invoice.invoiceNumber}. Click New Invoice for a fresh number.`;
+        jsonUploadError = '';
+        persist('upload-json');
+        render();
+      } catch (err) {
+        console.error('[json] upload failed', err);
+        jsonUploadError = err?.message || 'Failed to load invoice JSON.';
+        render();
+      }
+    });
+  }
 
   const form = document.querySelector('#invoice-fields');
 
@@ -446,6 +498,109 @@ function getStorageErrorMessage(err) {
     return 'Unable to save invoice draft: browser storage quota exceeded. Remove the logo or clear other local data.';
   }
   return `Unable to save invoice draft: ${err?.message || 'unknown error'}`;
+}
+
+function triggerDownload(blob, filename) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+function invoiceToExportJson(invoice) {
+  return {
+    customerName: invoice.customerName,
+    customerAddress: invoice.customerAddress,
+    invoiceNumber: invoice.invoiceNumber,
+    date: invoice.date,
+    terms: invoice.terms,
+    lineItems: invoice.lineItems.map((item) => ({
+      description: item.description,
+      qty: Number(item.qty) || 0,
+      price: Number(item.price) || 0,
+    })),
+  };
+}
+
+async function parseInvoiceJsonFile(file) {
+  const text = await readFileAsText(file);
+  let parsed;
+  try {
+    parsed = JSON.parse(text);
+  } catch (err) {
+    throw new Error('Invalid JSON file.');
+  }
+
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+    throw new Error('Invoice JSON must be an object.');
+  }
+
+  const invoiceNumber = String(parsed.invoiceNumber ?? '').trim();
+  const customerName = String(parsed.customerName ?? '').trim();
+  const customerAddress = String(parsed.customerAddress ?? '');
+  const date = String(parsed.date ?? '').trim();
+  const terms = String(parsed.terms ?? '');
+  const lineItems = parsed.lineItems;
+
+  if (!invoiceNumber) {
+    throw new Error('Invoice JSON is missing invoiceNumber.');
+  }
+  if (!customerName) {
+    throw new Error('Invoice JSON is missing customerName.');
+  }
+  if (!date) {
+    throw new Error('Invoice JSON is missing date.');
+  }
+  if (!Array.isArray(lineItems) || lineItems.length === 0) {
+    throw new Error('Invoice JSON must include at least one line item.');
+  }
+
+  const sanitizedLineItems = lineItems.map((item, index) => {
+    if (!item || typeof item !== 'object' || Array.isArray(item)) {
+      throw new Error(`Line item ${index + 1} is invalid.`);
+    }
+
+    const description = String(item.description ?? '').trim();
+    const qty = Number(item.qty);
+    const price = Number(item.price);
+
+    if (!description) {
+      throw new Error(`Line item ${index + 1} is missing a description.`);
+    }
+    if (!Number.isFinite(qty)) {
+      throw new Error(`Line item ${index + 1} has an invalid qty.`);
+    }
+    if (!Number.isFinite(price)) {
+      throw new Error(`Line item ${index + 1} has an invalid price.`);
+    }
+
+    return { description, qty, price };
+  });
+
+  const normalizedInvoice = {
+    customerName,
+    customerAddress,
+    invoiceNumber,
+    date,
+    terms,
+    lineItems: sanitizedLineItems,
+  };
+
+  const validation = validateInvoice(normalizedInvoice);
+  if (!validation.ok) {
+    const errors = [];
+    if (validation.errors.customerName) errors.push(validation.errors.customerName);
+    for (const [index, row] of validation.errors.lineItems.entries()) {
+      if (!row) continue;
+      if (row.qty) errors.push(`Line ${index + 1}: ${row.qty}`);
+      if (row.price) errors.push(`Line ${index + 1}: ${row.price}`);
+    }
+    throw new Error(errors.join(' '));
+  }
+
+  return normalizedInvoice;
 }
 
 /**

@@ -150,4 +150,3 @@ Updated
 
 ---
 
-This is folded into the plan — Phases 1–8 are now final. Want the full consolidated plan printed out again, or are we good to start Phase 1?
