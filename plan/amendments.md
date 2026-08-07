@@ -186,3 +186,85 @@ If the render function rebuilds the entire form's HTML (e.g. `container.innerHTM
 **Deliverable:** downloaded files are named `Invoice-{customerName}-{invoiceNumber}.pdf` and `.json`, with customer names sanitized for filename safety and a fallback for the empty-name edge case.
 
 ---
+
+## Phase 15 — Package as an Electron desktop app (revised)
+
+- **Install dependencies:**
+
+  ```bash
+  npm install --save-dev electron electron-builder
+  ```
+
+- **Fix Vite's asset path resolution for `file://` loading:**
+  In `vite.config.js`, explicitly set:
+
+  ```js
+  export default defineConfig({
+    base: "./",
+    // ...existing config
+  });
+  ```
+
+  Without this, Vite's default root-relative asset paths (`/assets/index.js`) fail to resolve when Electron loads `index.html` via `file://`, producing a blank white screen with no obvious error.
+
+- **Create `electron-main.js`** with a dev/prod split so HMR still works during development:
+
+  ```js
+  const { app, BrowserWindow } = require("electron");
+  const path = require("path");
+
+  function createWindow() {
+    const win = new BrowserWindow({
+      width: 1200,
+      height: 800,
+      webPreferences: { contextIsolation: true },
+    });
+
+    if (app.isPackaged) {
+      win.loadFile(path.join(__dirname, "dist", "index.html"));
+    } else {
+      win.loadURL("http://localhost:5173"); // Vite dev server
+    }
+  }
+
+  app.whenReady().then(createWindow);
+
+  app.on("window-all-closed", () => {
+    if (process.platform !== "darwin") app.quit();
+  });
+  ```
+
+  This means during development you run the Vite dev server + Electron pointed at `localhost:5173`, keeping full HMR — a production build is only needed when actually packaging, not after every UI tweak.
+
+- **Replace Blob/`<a download>` file saving with Electron's native save dialog:**
+  Blob URLs + `<a download>` behave unreliably under `file://` (silent failures, or files dropped into the default Downloads folder with no prompt). Instead:
+  - Set up an IPC bridge (`preload.js` with `contextBridge`) exposing a `saveFile` method to the renderer
+  - Main process handles the actual write via `dialog.showSaveDialog()` + `fs.writeFileSync()`, giving the user a normal native "Save As..." prompt with their chosen location and filename (using the Phase 14 naming convention)
+  - This affects both the PDF and JSON downloads (Phase 5/8/14) — the generation logic (producing PDF bytes / JSON string) stays identical, only the "hand it to the user" step changes from a Blob-URL download to an IPC call to the main process
+  - Note: this means the download mechanism now branches — Blob/`<a download>` when running in a regular browser (if you ever still want the web version usable), native save dialog when running inside Electron. Worth a small `isElectron` check to pick the right path.
+
+- **Update `package.json`:**
+  - `"main": "electron-main.js"`
+  - Scripts:
+    ```json
+    "electron:dev": "vite dev & electron .",
+    "electron:build": "npm run build && electron-builder"
+    ```
+  - `electron-builder` config block: app name, icon, output directory, target format
+
+- **Build sequence (env baking, unchanged from before):**
+  1. `.env` must have real values before building — never committed, never bundled raw
+  2. `npm run electron:build` runs `vite build` (inlining `VITE_*` values into `dist/`) then `electron-builder` packages that already-baked `dist/`
+
+- **Cross-compilation constraint — explicit limitation, not a fix to build around:**
+  `electron-builder` can only produce a native installer for the OS it's running on (a macOS `.dmg`/`.app` must be built on macOS, a Windows `.exe`/NSIS installer on Windows) without setting up a CI pipeline. Given this is a personal tool, **build on whichever OS you're actually going to use it on** — no cross-compilation setup needed unless you want the installer for a second OS later, at which point GitHub Actions (or similar CI) would be the way to produce it without owning both machines.
+
+- **Re-test:**
+  - Dev mode: confirm HMR still works (edit a file, see it reload without a full rebuild)
+  - Packaged app: confirm no blank white screen on launch (validates the `base: './'` fix)
+  - Download flow: confirm PDF/JSON both trigger a native "Save As..." dialog rather than silently landing in Downloads
+  - Confirm the installer only targets the OS it was built on, and note that as expected behavior rather than a bug if you later try building for another OS on the same machine
+
+**Deliverable:** a properly packaged, installable Electron app that launches without a blank-screen bug, retains a smooth HMR-based dev workflow, saves files via native OS dialogs instead of unreliable Blob downloads, and is understood to require native-OS builds per target platform.
+
+---

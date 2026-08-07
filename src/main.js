@@ -567,6 +567,16 @@ function getStorageErrorMessage(err) {
 }
 
 function triggerDownload(blob, filename) {
+  // If running inside Electron, prefer native save dialog via preload bridge
+  try {
+    if (window && window.electronAPI && typeof window.electronAPI.saveFile === 'function') {
+      const arrayBufferPromise = blob.arrayBuffer();
+      return arrayBufferPromise.then((buf) => window.electronAPI.saveFile({ defaultPath: filename, data: buf }));
+    }
+  } catch (e) {
+    console.warn('Electron saveFile bridge not available, falling back to browser download', e);
+  }
+
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
