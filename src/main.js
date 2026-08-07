@@ -7,6 +7,8 @@ import {
   formatGbp,
   lineTotal,
   invoiceTotal,
+  subtotal,
+  vatAmount,
 } from './invoiceState.js';
 import { generateInvoicePdf } from './generatePdf.js';
 import { validateInvoice } from './validate.js';
@@ -34,6 +36,8 @@ const app = document.querySelector('#app');
 
 function render() {
   const total = invoiceTotal(invoice);
+  const sub = subtotal(invoice);
+  const vat = vatAmount(invoice);
   const customerNameError = fieldErrors?.customerName;
 
   app.innerHTML = `
@@ -100,6 +104,17 @@ function render() {
               Terms
               <input type="text" name="terms" value="${escapeAttr(invoice.terms)}" />
             </label>
+            <label>
+              VAT rate (%)
+              <input
+                type="number"
+                name="vatRate"
+                value="${escapeAttr(String(invoice.vatRate ?? 20))}"
+                min="0"
+                max="100"
+                step="0.01"
+              />
+            </label>
           </fieldset>
 
           <fieldset>
@@ -128,7 +143,6 @@ function render() {
             </div>
             <div class="line-items-footer">
               <button type="button" id="add-line-item" class="btn btn-secondary">Add line item</button>
-              <p class="invoice-total">Total <strong>${formatGbp(total)}</strong></p>
             </div>
           </fieldset>
 
@@ -249,8 +263,8 @@ function refreshLineItemIndices() {
 }
 
 function updateInvoiceTotalDisplay() {
-  const totalEl = document.querySelector('.invoice-total strong');
-  if (totalEl) totalEl.textContent = formatGbp(invoiceTotal(invoice));
+  // UI no longer displays totals; trigger preview update instead.
+  schedulePreview({ immediate: false });
 }
 
 function bindEvents() {
@@ -421,8 +435,7 @@ function bindEvents() {
         item[field] = target.value === '' ? 0 : Number(target.value);
         const output = lineItem.querySelector('.line-total');
         if (output) output.textContent = formatGbp(lineTotal(item));
-        const totalEl = document.querySelector('.invoice-total strong');
-        if (totalEl) totalEl.textContent = formatGbp(invoiceTotal(invoice));
+        updateInvoiceTotalDisplay();
       }
 
       if (fieldErrors) {
@@ -439,9 +452,16 @@ function bindEvents() {
       name === 'date' ||
       name === 'terms' ||
       name === 'customerName' ||
-      name === 'customerAddress'
+      name === 'customerAddress' ||
+      name === 'vatRate'
     ) {
-      invoice[name] = target.value;
+      if (name === 'vatRate') {
+        const v = target.value === '' ? 0 : Number(target.value);
+        invoice.vatRate = Number.isFinite(v) ? Math.min(100, Math.max(0, v)) : 0;
+        updateInvoiceTotalDisplay();
+      } else {
+        invoice[name] = target.value;
+      }
       if (name === 'invoiceNumber') {
         invoiceNumberNeedsReview = false;
         const banner = document.querySelector('.banner');
@@ -557,6 +577,7 @@ function invoiceToExportJson(invoice) {
     invoiceNumber: invoice.invoiceNumber,
     date: invoice.date,
     terms: invoice.terms,
+    vatRate: invoice.vatRate,
     lineItems: invoice.lineItems.map((item) => ({
       description: item.description,
       qty: Number(item.qty) || 0,
@@ -583,6 +604,7 @@ async function parseInvoiceJsonFile(file) {
   const customerAddress = String(parsed.customerAddress ?? '');
   const date = String(parsed.date ?? '').trim();
   const terms = String(parsed.terms ?? '');
+  const vatRate = parsed.vatRate;
   const lineItems = parsed.lineItems;
 
   if (!invoiceNumber) {
@@ -626,8 +648,13 @@ async function parseInvoiceJsonFile(file) {
     invoiceNumber,
     date,
     terms,
+    vatRate: typeof vatRate === 'number' && Number.isFinite(vatRate) ? vatRate : (vatRate ? Number(vatRate) : 20),
     lineItems: sanitizedLineItems,
   };
+
+  if (typeof normalizedInvoice.vatRate !== 'number' || !Number.isFinite(normalizedInvoice.vatRate) || normalizedInvoice.vatRate < 0 || normalizedInvoice.vatRate > 100) {
+    throw new Error('Invalid vatRate in invoice JSON. It must be a number between 0 and 100.');
+  }
 
   const validation = validateInvoice(normalizedInvoice);
   if (!validation.ok) {

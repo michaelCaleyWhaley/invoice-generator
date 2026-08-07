@@ -7,7 +7,7 @@ import {
   ISSUER_DETAILS,
   PAYMENT_DETAILS,
 } from './constants.js';
-import { formatGbp, lineTotal, invoiceTotal } from './invoiceState.js';
+import { formatGbp, lineTotal, invoiceTotal, subtotal, vatAmount } from './invoiceState.js';
 
 const FONT = 'Helvetica';
 const FONT_BOLD = 'Helvetica-Bold';
@@ -262,25 +262,57 @@ function drawLineItem(doc, item, contentBottom) {
 
 function drawTotals(doc, invoiceData, contentBottom) {
   ensureBlockSpace(doc, 36, contentBottom);
-
   doc
     .moveTo(COL.price, doc.y)
     .lineTo(PAGE_WIDTH - MARGIN, doc.y)
     .stroke('#333');
   doc.y += 8;
 
-  const y = doc.y;
-  doc.font(FONT_BOLD).fontSize(11);
-  doc.text('Total', COL.price, y, {
+  const sub = subtotal(invoiceData);
+  const vat = vatAmount(invoiceData);
+  const total = invoiceTotal(invoiceData);
+
+  const startY = doc.y;
+  const lineHeight = 14; // consistent vertical spacing between lines
+
+  // Subtotal (normal)
+  doc.font(FONT).fontSize(10);
+  const subtotalY = startY;
+  doc.text('Subtotal', COL.price, subtotalY, {
     width: COL_WIDTH.price,
     align: 'right',
   });
-  doc.text(formatGbp(invoiceTotal(invoiceData)), COL.total, y, {
+  doc.text(formatGbp(sub), COL.total, subtotalY, {
     width: COL_WIDTH.total,
     align: 'right',
   });
 
-  doc.y = y + 24;
+  // VAT line (normal)
+  const vatLabel = `VAT (${(Number(invoiceData.vatRate) || 0)}%)`;
+  const vatY = subtotalY + lineHeight;
+  doc.text(vatLabel, COL.price, vatY, {
+    width: COL_WIDTH.price,
+    align: 'right',
+  });
+  doc.text(formatGbp(vat), COL.total, vatY, {
+    width: COL_WIDTH.total,
+    align: 'right',
+  });
+
+  // Total (bold)
+  const totalY = vatY + lineHeight;
+  doc.font(FONT_BOLD).fontSize(11);
+  doc.text('Total', COL.price, totalY, {
+    width: COL_WIDTH.price,
+    align: 'right',
+  });
+  doc.text(formatGbp(total), COL.total, totalY, {
+    width: COL_WIDTH.total,
+    align: 'right',
+  });
+
+  // Advance doc.y consistently past the totals block
+  doc.y = totalY + lineHeight + 6;
 }
 
 function drawFooter(doc, invoiceData, contentBottom) {

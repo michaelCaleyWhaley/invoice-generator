@@ -49,6 +49,7 @@ export function createDefaultInvoice() {
     lineItems: [createEmptyLineItem()],
     logoType: null,
     logoData: '',
+    vatRate: 20,
   };
 }
 
@@ -63,7 +64,17 @@ export function lineTotal(item) {
  * @param {ReturnType<typeof createDefaultInvoice>} invoice
  */
 export function invoiceTotal(invoice) {
+  return subtotal(invoice) + vatAmount(invoice);
+}
+
+export function subtotal(invoice) {
   return invoice.lineItems.reduce((sum, item) => sum + lineTotal(item), 0);
+}
+
+export function vatAmount(invoice) {
+  const rate = Number(invoice.vatRate) || 0;
+  const sub = subtotal(invoice);
+  return (sub * (rate / 100));
 }
 
 /**
@@ -92,6 +103,7 @@ export function loadInvoice() {
           ? parsed.logoType
           : null,
       logoData: String(parsed.logoData ?? ''),
+      vatRate: typeof parsed.vatRate === 'number' && Number.isFinite(parsed.vatRate) ? parsed.vatRate : (parsed.vatRate ? Number(parsed.vatRate) : 20),
     };
     return { invoice, restored: true };
   } catch (err) {
@@ -116,6 +128,21 @@ export function clearStoredInvoice() {
  * @returns {ReturnType<typeof createDefaultInvoice>}
  */
 export function createNewInvoice() {
-  clearStoredInvoice();
-  return createDefaultInvoice();
+  // Preserve any stored logo (logoType/logoData) when creating a fresh invoice.
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    const parsed = raw ? JSON.parse(raw) : null;
+    const logoType = parsed?.logoType === 'svg' || parsed?.logoType === 'raster' ? parsed.logoType : null;
+    const logoData = String(parsed?.logoData ?? '');
+
+    const fresh = createDefaultInvoice();
+    fresh.logoType = logoType;
+    fresh.logoData = logoData;
+    // Persist the fresh invoice (without clearing stored logo)
+    saveInvoice(fresh);
+    return fresh;
+  } catch (err) {
+    // fallback to default behaviour
+    return createDefaultInvoice();
+  }
 }

@@ -389,17 +389,7 @@ button:focus-visible {
   border-top: 1px solid var(--border);
 }
 
-.invoice-total {
-  margin: 0;
-  font-size: 0.95rem;
-  font-variant-numeric: tabular-nums;
-}
-
-.invoice-total strong {
-  font-family: var(--mono);
-  font-size: 1.05rem;
-  margin-left: 0.35rem;
-}
+/* Invoice totals are shown in the generated PDF only; UI totals removed. */
 
 @media (max-width: 900px) {
   .app-shell {

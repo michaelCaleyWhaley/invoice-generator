@@ -115,3 +115,49 @@ If the render function rebuilds the entire form's HTML (e.g. `container.innerHTM
 **Deliverable:** all business-specific config lives in a git-ignored `.env`, with `.env.example` documenting the required keys; building the app correctly bakes these values into the static output exactly as before, just sourced from environment config instead of a hardcoded file.
 
 ---
+
+## Phase 12 — "New Invoice" should not clear the logo
+
+- Change "New Invoice" / "Clear Form" button behavior: it should continue resetting `customerName`, `customerAddress`, `terms`, `lineItems`, and generating a fresh `YYMMDD-XXXX` invoice number (as originally specified in Phase 2) — but should **no longer** clear the logo or `logoType`
+- Audit the current "New Invoice" click handler to find where logo/`logoType` is being reset alongside the invoice fields, and remove that specific reset — leaving the logo's `localStorage` entry untouched
+- Confirm this aligns with the logo's existing storage model (Phase 7: logo persisted alongside issuer details, treated as a fixed setting) — this change makes the _behavior_ consistent with how the data was already being _stored_
+- Re-test: upload a logo, fill in an invoice, click "New Invoice" — confirm the form clears and a new invoice number generates, but the logo remains visible in both the Logo accordion and the live preview
+- Re-test "Remove logo" still independently clears it (that control is unaffected by this change — it's the only intended way to clear the logo now)
+
+**Deliverable:** clicking "New Invoice" clears all per-invoice fields and generates a fresh invoice number, while leaving the previously uploaded logo untouched; the logo can only be cleared via the explicit "Remove logo" control.
+
+---
+
+## Phase 13 — VAT calculation (updated)
+
+- **Data model update** — add to per-invoice state:
+  ```js
+  {
+    ...
+    vatRate: 20, // percentage, editable, defaults to 20
+  }
+  ```
+- **Form UI** — add an editable "VAT rate (%)" field near the totals/terms area, pre-filled with `20`, accepting numeric input (validate: 0–100, allow decimals for edge cases like 5% reduced rate)
+- **Calculation logic** (in the PDF generation function, Phase 3):
+  ```
+  subtotal = sum(lineItems.map(item => item.qty * item.price))
+  vatAmount = subtotal * (vatRate / 100)
+  total = subtotal + vatAmount
+  ```
+- **PDF layout** — totals section now shows three lines instead of one:
+  ```
+  Subtotal:      £X,XXX.XX
+  VAT (20%):     £XXX.XX
+  Total:         £X,XXX.XX
+  ```
+  all formatted via the existing `Intl.NumberFormat('en-GB', {style:'currency', currency:'GBP'})`
+- **Live preview** — reflects VAT rate changes with existing debounced regeneration, so adjusting the rate updates subtotal/VAT/total live
+- **JSON export/import (Phase 8)** — include `vatRate` in the exported/imported invoice JSON, since it's per-invoice data
+- Validation: VAT amount and total recompute correctly when line items or rate change; test with `vatRate = 0` to confirm it shows £0.00 VAT rather than erroring
+
+**Deliverable:** invoices show a subtotal, editable-rate VAT line (defaulting to 20%), and a correctly calculated total; all values update live and round-trip correctly through JSON export/import. VAT registration number left out for now — can be added later as a simple addition to the issuer block if needed.
+
+- don't include Subtotal, VAT, Total in add line item input
+- The spacing between Subtotal, VAT, Total on the pdf need to be consistent
+
+---
